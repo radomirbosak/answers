@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+import sys
+import sys, tempfile, os
+from subprocess import call
+
+
+from slugify import slugify
+from pathlib import Path, PurePath, PurePosixPath
+from fuzzywuzzy import fuzz, process
+
+
+# think about flashtext
+# https://www.freecodecamp.org/news/regex-was-taking-5-days-flashtext-does-it-in-15-minutes-55f04411025f/
+
+
+def get_choices():
+    choices = []
+    for file in list_answer_files():
+        contents = Path(file).read_text()
+        choices.append(contents)
+    return choices
+
+
+def list_answer_files():
+    answer_path = '.local/share/answer/'
+    pth = Path.home() / PurePosixPath(answer_path)
+
+    files = []
+    for file in pth.iterdir():
+        pure_path = PurePath(file)
+        if pure_path.suffix == '.md':
+            files.append(pure_path)
+    return files
+
+
+def add(arguments):
+    EDITOR = os.environ.get('EDITOR','vim') #that easy!
+
+    keywords = ' '.join(arguments)
+    initial_message = "\n### questions ###\n" + keywords # if you want to set up the file somehow
+
+    with tempfile.NamedTemporaryFile(suffix=".tmp", mode='w+') as tf:
+        tf.write(initial_message)
+        tf.flush()
+        call([EDITOR, tf.name])
+
+        # do the parsing with `tf` using regular File operations.
+        # for instance:
+        tf.seek(0)
+        edited_message = tf.read()
+
+    if not edited_message or edited_message == initial_message:
+        print('File not changed, nothing added')
+        return
+
+    destfilename = slugify(keywords)
+    with open(str(Path.home()) + '/.local/share/answer/' + destfilename + '.md', 'w') as fp:
+        fp.write(edited_message)
+    print('wrote to ' + destfilename)
+
+
+def match(arguments):
+    keywords = ' '.join(arguments)
+    choices = get_choices()
+
+    text, percent = process.extractOne(keywords, choices)
+    print(text)
+
+
+def main():
+    arguments = sys.argv[1:]
+    action = None
+    if len(arguments) >= 1:
+        action = sys.argv[1]
+
+    if action == 'add':
+        add(arguments[1:])
+    else:
+        match(arguments)
+
+
+if __name__ == '__main__':
+    main()
